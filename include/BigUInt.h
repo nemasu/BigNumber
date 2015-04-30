@@ -190,6 +190,7 @@ class BigUInt {
 			return ret;
 
 		}
+	friend bool operator==( BigUInt &a, BigUInt &b );
 	friend bool operator< (BigUInt &a, int b);
 	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
 	friend BigUInt operator+( BigUInt &a, BigUInt &b );
@@ -300,3 +301,16 @@ operator*( BigUInt &a, uint32_t buint ) {
 	return operator*(a, b);
 }
 
+bool
+operator==( BigUInt &a, BigUInt &b ) {
+	if( a.size() != b.size() ){
+		return false;
+	}
+
+	for( int i = 0; i < a.size(); ++i ) {
+		if( a.value[i] != b.value[i] ) {
+			return false;
+		}
+	}
+	return true;
+}
