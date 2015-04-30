@@ -11,9 +11,20 @@ check( string test, BigUInt &value, string answer ) {
 	if( value == correct ) {
 		cout << "PASS";
 	} else {
-		cout << "FAIL";
+		cout << "FAIL; Got: " << value;;
+
 	}
 	cout << endl;
+}
+
+void
+test_exp() {
+	
+	BigUInt x1("458752045245");
+	BigUInt x2("12");
+	BigUInt total = x1 ^ x2;
+
+	check("test_exp", total, "86883270736994799311980968740310906566810752413024134167950461737851897861230188355827751449141728642574950576958130475206898658789306640625");
 }
 
 void
@@ -77,6 +88,7 @@ main( int argv, char **argc ) {
 	test_sub();
 	test_easymul();
 	test_hardmul();
+	test_exp();
 
 	return 0;
 }

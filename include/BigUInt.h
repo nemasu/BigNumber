@@ -138,6 +138,13 @@ class BigUInt {
 				b.value.pop_back();
 			}
 		}
+		
+		static void
+		unpad( BigUInt &a ) {
+			while(a.value.back() == 0 && a.value.size() != 1) {
+				a.value.pop_back();
+			}
+		}
 
 		static BigUInt
 		karatsuba( BigUInt &a, BigUInt &b ) {
@@ -186,24 +193,52 @@ class BigUInt {
 			ret = ret + z0;
 
 			unpad(a, b);
+			unpad(ret);
 
 			return ret;
 
 		}
 	friend bool operator==( BigUInt &a, BigUInt &b );
-	friend bool operator< (BigUInt &a, int b);
+	friend bool operator!=( BigUInt &a, BigUInt &b );
+	friend bool operator< (BigUInt &a, uint32_t b);
+	friend bool operator> (BigUInt &a, uint32_t b);
 	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
 	friend BigUInt operator+( BigUInt &a, BigUInt &b );
 	friend BigUInt operator-( BigUInt &a, BigUInt &b );
+	friend BigUInt operator-( BigUInt &a, uint32_t b );
 	friend BigUInt operator*( BigUInt &a, BigUInt &b );
 	friend BigUInt operator*( BigUInt &a, uint32_t b );
+	friend BigUInt operator^( BigUInt &a, BigUInt &b );
 };
 
+BigUInt
+operator^( BigUInt &a, BigUInt &b ) {
+	BigUInt ret = a;
+	BigUInt count(b-1);
+	while( count > 0  ) {
+		ret = ret * a;
+		count = count - 1;
+	}
+
+	return ret;
+}
+
 bool
-operator< (BigUInt &a, int b) {
+operator> (BigUInt &a, uint32_t b) {
+	return a.value.size() == 1 ? a.value[0] > b : false;
+}
+
+bool
+operator< (BigUInt &a, uint32_t b) {
 	return a.value.size() == 1 ? a.value[0] < b : false;
 }
 
+BigUInt
+operator-( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator-(a, b);
+}
+	
 BigUInt
 operator-( BigUInt &a, BigUInt &b ) {
 	BigUInt ret;
@@ -301,6 +336,10 @@ operator*( BigUInt &a, uint32_t buint ) {
 	return operator*(a, b);
 }
 
+bool
+operator!=( BigUInt &a, BigUInt &b ) {
+	return !operator==(a, b);
+}
 bool
 operator==( BigUInt &a, BigUInt &b ) {
 	if( a.size() != b.size() ){
