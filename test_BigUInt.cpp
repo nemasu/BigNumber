@@ -1,9 +1,22 @@
 #include "include/BigUInt.h"
+#include <sstream>
 
+using std::stringstream;
 using std::string;
 using std::cout;
 using std::endl;
 
+void
+check( string test, bool value, bool answer ) {
+	cout << test << ": ";
+	if( value == answer ) {
+		cout << "PASS";
+	} else {
+		cout << "FAIL; Got: " << value << ", expected: " << answer;
+
+	}
+	cout << endl;
+}
 void
 check( string test, BigUInt &value, string answer ) {
 	BigUInt correct(answer);
@@ -11,10 +24,83 @@ check( string test, BigUInt &value, string answer ) {
 	if( value == correct ) {
 		cout << "PASS";
 	} else {
-		cout << "FAIL; Got: " << value;;
+		cout << "FAIL; Got: " << value << ", expected: " << answer;
 
 	}
 	cout << endl;
+}
+
+void
+test_mod() {
+	BigUInt x1("12458987452475924952952524952452452452456294576245");
+	BigUInt x2("4057280475247582274502475807");
+
+	BigUInt result = x1 % x2;
+
+	check("test_mod", result, "1434661386710805841329943680");
+}
+
+void
+test_div() {
+	BigUInt x1("1234567899990274058280457");
+	BigUInt x2("4057280475247582");
+
+	BigUInt result = x1 / x2;
+
+	check("test_div", result, "304284583");
+}
+
+void
+test_stringctor() {
+	BigUInt x1 ("123456789999027458280457");
+	stringstream ss;
+	ss << x1;
+	check("test_stringctor", ss.str() == "123456789999027458280457", true);
+}
+
+void
+test_lt() {
+	BigUInt x1("1234567899990274058280457");
+	BigUInt x2("12345678999902740582804572");
+	
+	check("test_lt", x1 < x2, true);
+
+	x1 = "1234567899990274058280456";
+	x2 = "1234567899990274058280457";
+	
+	check("test_lt", x1 < x2, true);
+
+	x1 = "1234567899990274058280457";
+	x2 = "2234567899990274058280457";
+	
+	check("test_lt", x1 < x2, true);
+
+	x1 = "123456789999027405828045700000";
+	x2 = "1234567899990274058280457";
+	
+	check("test_lt", x1 < x2, false);
+
+	x1 = "1234567899990";
+	x2 = "4057280475247582";
+	
+	check("test_lt", x1 < x2, true);
+
+
+}
+
+void
+test_at() {
+	BigUInt x1("12345678999902740582804572");
+	
+	BigUInt result1 = x1[13];
+	BigUInt result2 = x1[0];
+	BigUInt result3 = x1[25];
+	BigUInt result4 = x1[8];
+	
+	check("test_at", result1, "2");
+	check("test_at", result2, "1");
+	check("test_at", result3, "2");
+	check("test_at", result4, "9");
 }
 
 void
@@ -83,12 +169,16 @@ test_hardmul() {
 
 int
 main( int argv, char **argc ) {
-
+	test_stringctor();
 	test_add();
 	test_sub();
 	test_easymul();
 	test_hardmul();
 	test_exp();
+	test_at();
+	test_lt();
+	test_div();
+	test_mod();
 
 	return 0;
 }

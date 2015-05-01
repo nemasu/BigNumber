@@ -1,5 +1,7 @@
 #include <iostream>
+#include <iomanip>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -79,11 +81,39 @@ class BigUInt {
 			return ret;
 		}
 
+		uint32_t operator[]( size_t idx ) {
+			//Zero based where 0 returns most significant value.
+			size_t numDigits = getNumberOfDigits();
+			size_t revIdx = numDigits - idx - 1;
+
+			size_t out = revIdx / MAX_DIGIT;
+			size_t in  = revIdx % MAX_DIGIT;
+			return ((int)(value[out] / pow(10, in)) % 10);
+
+		}
+
+		size_t getNumberOfDigits() {
+			size_t out = (value.size()-1) * MAX_DIGIT;
+			size_t in  = BigUInt::NumDigits(value.back());
+			return out + in;
+		}
+
 		
 	private:
 		//Stores value in reverse
 		vector<uint64_t> value;
-		
+
+		static size_t
+		NumDigits(uint64_t number)
+		{
+			size_t digits = 0;
+			while (number) {
+				number /= 10;
+				digits++;
+			}
+			return digits;
+		}
+
 		void insertAt( size_t location, uint32_t a ) {
 			value.insert(value.begin() + location, a);
 		}
@@ -93,16 +123,11 @@ class BigUInt {
 			BigUInt ret;
 			uint64_t carry = 0;	
 
-			vector<uint64_t>::iterator beg = a.value.begin();
-			vector<uint64_t>::iterator end = a.value.end();
-			while(beg != end) {
-				uint64_t av = *beg;
-				uint64_t value = av * b + carry;
+			for( auto i : a.value ) {
+				uint64_t value = i * b + carry;
 
 				ret.value.push_back(value % MAX_LIMIT);
 				carry = value / MAX_LIMIT;
-
-				beg++;
 			}
 
 			if( carry ) {
@@ -147,9 +172,64 @@ class BigUInt {
 		}
 
 		static BigUInt
-		karatsuba( BigUInt &a, BigUInt &b ) {
+		LongDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
+			BigUInt ret((uint64_t)0);
+
+			size_t Nsize = N.getNumberOfDigits();
+
+			BigUInt Npart( (uint64_t)0 );
+		
+			bool solved = false;
+			size_t idx = 0;
+			while(true) {
+				//Find appropriate Npart
+				while(Npart < D) {
+
+					if( idx + 1 > Nsize) {
+						//Done
+						solved = true;
+						break;
+					} else {
+						Npart = Npart * 10;
+						Npart = Npart + N[idx++];
+
+						//Add digit to result
+						ret = ret * 10;
+					}
+				}
+				
+				if( solved ) {
+					if( !mod ) {
+						return ret;
+					} else {
+						return Npart;
+					}
+				}
+
+				//till it goes over D
+				size_t Qpart = 1;
+				BigUInt Dmult = D;
+				while(true) {
+					if( Dmult < Npart ) {
+						Dmult = D * ++Qpart;
+					} else {
+						break;
+					}
+				}
+				Dmult = D * --Qpart;
+
+				//Remainder
+				Npart = Npart - Dmult;
+
+				//Put value in result.
+				ret = ret + Qpart;
+			}
+		}
+
+		static BigUInt
+		Karatsuba( BigUInt &a, BigUInt &b ) {
 			if( a.size() == 0 || b.size() == 0 ) {
-				std::cerr << "Error: karatsuba - a value has no contents." << std::endl;
+				std::cerr << "Error: Karatsuba - a value has no contents." << std::endl;
 			}
 			
 			if( a.size() == 1 || b.size() == 1 ) {
@@ -169,14 +249,14 @@ class BigUInt {
 			BigUInt  low2(b.value.begin()     , b.value.begin() + m2);
 			BigUInt high2(b.value.begin() + m2, b.value.end());
 
-			BigUInt z0 = karatsuba(low1, low2);
+			BigUInt z0 = Karatsuba(low1, low2);
 		
 			BigUInt lowhigh1 = low1 + high1;
 			BigUInt lowhigh2 = low2 + high2;
-			BigUInt z1 = karatsuba(lowhigh1, lowhigh2);
+			BigUInt z1 = Karatsuba(lowhigh1, lowhigh2);
 			
 				
-			BigUInt z2 = karatsuba(high1, high2);
+			BigUInt z2 = Karatsuba(high1, high2);
 			
 			BigUInt zdiff = z1 - z2;
 			zdiff = zdiff - z0;
@@ -198,18 +278,67 @@ class BigUInt {
 			return ret;
 
 		}
+	
+
 	friend bool operator==( BigUInt &a, BigUInt &b );
+	friend bool operator==( BigUInt &a, uint32_t b );
 	friend bool operator!=( BigUInt &a, BigUInt &b );
+	friend bool operator< (BigUInt &a, BigUInt &b);
 	friend bool operator< (BigUInt &a, uint32_t b);
 	friend bool operator> (BigUInt &a, uint32_t b);
 	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
 	friend BigUInt operator+( BigUInt &a, BigUInt &b );
+	friend BigUInt operator+( BigUInt &a, uint32_t b );
 	friend BigUInt operator-( BigUInt &a, BigUInt &b );
 	friend BigUInt operator-( BigUInt &a, uint32_t b );
 	friend BigUInt operator*( BigUInt &a, BigUInt &b );
 	friend BigUInt operator*( BigUInt &a, uint32_t b );
 	friend BigUInt operator^( BigUInt &a, BigUInt &b );
+	friend BigUInt operator^( BigUInt &a, uint32_t b );
+	friend BigUInt operator/( BigUInt &a, BigUInt &b );
+	friend BigUInt operator/( BigUInt &a, uint32_t b );
+	friend BigUInt operator%( BigUInt &a, BigUInt &b );
+	friend BigUInt operator%( BigUInt &a, uint32_t b );
 };
+
+BigUInt
+operator%( BigUInt &a, BigUInt &b ) {
+	if( a == 0 ) {
+		BigUInt ret((uint64_t)0);
+		return ret;
+	}
+
+	return BigUInt::LongDivide(a, b, true);
+}
+
+BigUInt
+operator%( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator%(a, b);
+}
+
+BigUInt
+operator/( BigUInt &a, BigUInt &b ) {
+	if( b == 0 ) {
+		std::cerr << "Error: Divide by 0." << std::endl;
+		BigUInt ret;
+		return ret;
+	}
+
+	return BigUInt::LongDivide(a, b);
+}
+
+BigUInt
+operator/( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator/(a, b);
+}
+
+BigUInt
+operator^( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator^(a, b);
+}
 
 BigUInt
 operator^( BigUInt &a, BigUInt &b ) {
@@ -226,6 +355,20 @@ operator^( BigUInt &a, BigUInt &b ) {
 bool
 operator> (BigUInt &a, uint32_t b) {
 	return a.value.size() == 1 ? a.value[0] > b : false;
+}
+
+bool
+operator< (BigUInt &a, BigUInt &b) {
+	if( a.value.size() != b.value.size() ) {
+		return a.value.size() < b.value.size();
+	} else {
+		for( int i = a.value.size()-1; i >= 0; --i ) {
+			if( a.value[i] != b.value[i] ) {
+				return a.value[i] < b.value[i];
+			}
+		}
+	}
+	return false;
 }
 
 bool
@@ -274,6 +417,12 @@ operator-( BigUInt &a, BigUInt &b ) {
 }
 
 BigUInt
+operator+( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator+(a, b);
+}
+
+BigUInt
 operator+( BigUInt &a, BigUInt &b ) {
 	BigUInt ret;
 	ret.value.reserve(a.value.size() + b.value.size() + 1);
@@ -298,15 +447,23 @@ operator+( BigUInt &a, BigUInt &b ) {
 
 std::ostream&
 operator <<(std::ostream& stream, const BigUInt& a) {
-	auto rbeg = a.value.rbegin();
-	auto rend = a.value.rend();
 
+	auto rbeg = a.value.rbegin();
+    auto rend = a.value.rend();
+
+	bool isFirst = true;
 	while( rbeg != rend ) {
-		if (*rbeg != 0) {
-			stream << *rbeg;
+		if( *rbeg != 0 ) {
+			if( !isFirst ) {
+				stream << std::setfill('0') << std::setw(MAX_DIGIT) << *rbeg;
+			} else {
+				stream << *rbeg;
+				isFirst = false;
+			}
 		} else {
 			stream << "000000000";
 		}
+
 		rbeg++;
 	}
 
@@ -321,12 +478,12 @@ operator*( BigUInt &a, BigUInt &b ) {
 		return BigUInt((uint64_t)(a.value[0] * b.value[0]));
 	} else if (  a.value.size() == 1 || b.value.size() == 1 ) {
 		if ( a.value.size() == 1 ) {
-			return BigUInt::Mul_u32int( b, a.value[0]);
+			return BigUInt::Mul_u32int( b, a.value[0] );
 		} else {
-			return BigUInt::Mul_u32int( a, b.value[0]);
+			return BigUInt::Mul_u32int( a, b.value[0] );
 		}
 	} else 	{
-		return BigUInt::karatsuba(a, b);
+		return BigUInt::Karatsuba(a, b);
 	}
 }
 
@@ -340,6 +497,13 @@ bool
 operator!=( BigUInt &a, BigUInt &b ) {
 	return !operator==(a, b);
 }
+
+bool
+operator==( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
+	return operator==(a, b);
+}
+
 bool
 operator==( BigUInt &a, BigUInt &b ) {
 	if( a.size() != b.size() ){
