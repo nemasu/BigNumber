@@ -98,7 +98,26 @@ class BigUInt {
 			return out + in;
 		}
 
-		
+		static BigUInt
+		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
+			BigUInt ret = 1;
+			BigUInt base = inBase % mod;
+			BigUInt exp = inExp;
+
+			while( exp > 0 ) {
+				std::cout << exp << std::endl;
+				BigUInt check1 = exp % 2;
+				if( check1 == 1 ){
+					ret = (ret * base);
+					ret = ret % mod;
+				}
+				exp = exp / 2;
+				base = base * base;
+				base = base % mod;
+			}
+
+			return ret;
+		}
 	private:
 		//Stores value in reverse
 		vector<uint64_t> value;
