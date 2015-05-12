@@ -1,12 +1,18 @@
 #include <iostream>
+#include <sstream>
 #include <iomanip>
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
 #include <string>
 #include <vector>
 
-#define MAX_LIMIT (uint64_t)1000000000
-#define MAX_DIGIT 9
+#define MAX_LIMIT (uint64_t)0x100000000
+#define MAX_DIGIT_HEX 8
+#define UINT64_HIGH 0xFFFFFFFF00000000
+#define UINT64_LOW  0xFFFFFFFF
+
+static const char DigitToHex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 using std::vector;
 using std::string;
@@ -19,49 +25,37 @@ class BigUInt {
 		}
 
 		BigUInt( const char * in ) {
-			string strIn(in);
-			*this = strIn;
+			string inStr(in);
+			initFromString(inStr);
 		}
 
 		BigUInt( string in ) {
-			long long length = in.length();
-		
-			while( length != 0 ) {
-				if( length - MAX_DIGIT > 0 ) {
-					value.push_back(atol( in.substr( length - MAX_DIGIT, MAX_DIGIT ).c_str()));
-				} else {
-					value.push_back(atol( in.substr( 0, length - MAX_DIGIT + 9 ).c_str()));
-					break;
-				}
-				length -= MAX_DIGIT;
-			}
+			initFromString(in);
 		}
 	
-		BigUInt( vector<uint64_t> in ) {
+		BigUInt( vector<uint32_t> in ) {
 			value = in;
 		}
 		
-		BigUInt( vector<uint64_t>::iterator in1, vector<uint64_t>::iterator in2 ) {
-			value = vector<uint64_t>(in1, in2);
+		BigUInt( vector<uint32_t>::iterator in1, vector<uint32_t>::iterator in2 ) {
+			value = vector<uint32_t>(in1, in2);
 			if (value.size() == 0 ) {
-				value.push_back(0);
+				append(0);
 			}
 		}
 
 		BigUInt( uint64_t in ) {
-			if( in > 999999999 && in < 1000000000000000000 ) {
-				value.push_back( in % MAX_LIMIT );
-				value.push_back( in / MAX_LIMIT );
-			} else if ( in > 1000000000000000000 ) {
-				value.push_back( in % MAX_LIMIT );
-				value.push_back( (in / MAX_LIMIT) % MAX_LIMIT );
-				value.push_back( in / 1000000000000000000 );
-			}
-			else {
-				value.push_back( in );
+			if( in >= MAX_LIMIT ) {
+				uint64_t high = in & UINT64_HIGH;
+				high = high >> 32;
+				value.push_back( in & UINT64_LOW  );
+				value.push_back( high );
+			} else {
+				append( in );
 			}
 		}
-
+		
+		
 		size_t
 		size() {
 			return value.size();
@@ -70,32 +64,19 @@ class BigUInt {
 		uint64_t
 		toUint64() {
 			uint64_t ret = 0;
-			if( value.size() > 2 ) {
+			if        ( value.size() == 1 ) {
+				ret = value[0];
+				return ret;
+			} else if ( value.size() == 2 ) {
+				ret |= value[0];
+				ret =  ret << 32;
+				ret |= value[1];
+			} else {
 				std::cerr << "Error: Can't convert to uint64, value too large." << std::endl; 
 				return 0;
 			}
 
-			ret = value[1] * MAX_LIMIT;
-			ret += value[0];
-
 			return ret;
-		}
-
-		uint32_t operator[]( size_t idx ) {
-			//Zero based where 0 returns most significant value.
-			size_t numDigits = getNumberOfDigits();
-			size_t revIdx = numDigits - idx - 1;
-
-			size_t out = revIdx / MAX_DIGIT;
-			size_t in  = revIdx % MAX_DIGIT;
-			return ((int)(value[out] / pow(10, in)) % 10);
-
-		}
-
-		size_t getNumberOfDigits() {
-			size_t out = (value.size()-1) * MAX_DIGIT;
-			size_t in  = BigUInt::NumDigits(value.back());
-			return out + in;
 		}
 
 		static BigUInt
@@ -105,52 +86,331 @@ class BigUInt {
 			BigUInt exp = inExp;
 
 			while( exp > 0 ) {
-				std::cout << exp << std::endl;
 				BigUInt check1 = exp % 2;
 				if( check1 == 1 ){
 					ret = (ret * base);
 					ret = ret % mod;
 				}
-				exp = exp / 2;
+				exp = exp >> 1;
 				base = base * base;
 				base = base % mod;
 			}
 
 			return ret;
 		}
+
+		string
+		toString() const {
+			string hexIn = toHexString();
+			string dec;
+			ConvertHexToDec( hexIn, dec );
+			return dec;
+		}
+
+		string
+		toHexString() const {
+			std::stringstream ss;
+			auto i = value.rbegin();
+			auto end = value.rend();
+			while( i != end ) {
+				ss << std::hex << *i;
+				i++;
+			}
+			return ss.str();
+
+		}
 	private:
 		//Stores value in reverse
-		vector<uint64_t> value;
+		vector<uint32_t> value;
 
-		static size_t
-		NumDigits(uint64_t number)
-		{
-			size_t digits = 0;
-			while (number) {
-				number /= 10;
-				digits++;
+		static void
+		ConvertHexToDec( string &hex, string &dec ) {
+			dec = hex;
+
+			if( dec == "0" ) {
+				return;
 			}
-			return digits;
+
+			for( auto &x : dec ) {
+				x = 0;
+			}
+
+			BigUInt pow(1);
+			BigUInt result((uint64_t)0);
+			BigUInt value((uint64_t)0);
+			BigUInt carry((uint64_t)0);
+			BigUInt decV((uint64_t)0);
+
+			string revIn = hex;
+			std::reverse(revIn.begin(), revIn.end());
+			std::transform(revIn.begin(), revIn.end(), revIn.begin(), ::toupper);
+			for( auto hexVal : revIn ) {
+				//Convert ascii to real values
+				if( hexVal < 58 ) {
+					carry = hexVal - '0';
+				} else {
+					carry = hexVal - 55;
+				}
+
+				//Multiply to get full value
+				carry = carry * pow;
+				if( carry == 0 && pow == 1) {
+					carry = (uint64_t)0;
+				}
+
+				//Add carry to dec string
+				for( auto &decVal : dec ) {
+					if( carry == 0 && decVal == 0  ) {
+						continue;
+					}
+					decV = decVal;
+					result = decV + carry;
+					value = result % 10;
+					decVal = (char)value.toUint64();
+					carry = result / 10;
+				}
+								
+				while( carry > 0 ) {
+					value = carry % 10;
+					dec.push_back( (char)value.toUint64() );
+					carry = carry / 10;
+				}
+				pow = pow * 16;
+			}
+
+			//Remove leading(trailing) zeros
+			while( dec.back() == 0 ) {
+				dec.pop_back();
+			}
+
+			for ( auto &decVal : dec ) {
+				if( decVal >= 0 && decVal <= 9 ) {
+					decVal += '0';
+				} else {
+					std::cerr << "Invalid character in string: " << decVal << std::endl;
+					return;
+				}
+			}
+
+			std::reverse(dec.begin(), dec.end());
+
 		}
 
-		void insertAt( size_t location, uint32_t a ) {
-			value.insert(value.begin() + location, a);
+		static void
+		ConvertDecToHex( string &dec, string &hex ) {
+			hex = dec;
+
+			if( hex == "0" ) {
+				return;
+			}
+
+			for( auto &x : hex ) {
+				x = 0;
+			}
+
+			BigUInt pow(1);
+			BigUInt result((uint64_t)0);
+			BigUInt value((uint64_t)0);
+			BigUInt carry((uint64_t)0);
+			BigUInt hexV((uint64_t)0);
+
+			string revIn = dec;
+			std::reverse(revIn.begin(), revIn.end());
+			for( auto decVal : revIn ) {
+				carry = decVal - '0';
+				carry = carry * pow;
+				if( carry == 0 && pow == 1) {
+					carry = (uint64_t)0;
+				}
+				for( auto &hexVal : hex ) {
+					if( carry == 0 && hexVal == 0  ) {
+						continue;
+					}
+					hexV = hexVal;
+					result = hexV + carry;
+					value = result % 16;
+					hexVal = (char)value.toUint64();
+					
+					carry = result / 16;
+				}
+				while( carry > 0 ) {
+					value = carry % 16;
+					hex.push_back( (char)value.toUint64() );
+					carry = carry / 16;
+				}
+
+				pow = pow * 10;
+			}
+			
+			//Remove leading(trailing) zeros
+			while( hex.back() == 0 ) {
+				hex.pop_back();
+			}
+
+			for ( auto &hexVal : hex ) {
+				if( hexVal >= 0 && hexVal <= 9 ) {
+					hexVal += '0';
+				} else if ( hexVal >= 0xA && hexVal <= 0xF ) {
+					hexVal += 'A' - 0xA;
+				} else {
+					std::cerr << "Invalid character in string: 0x" << std::hex << hexVal << std::endl;
+					return;
+				}
+			}
+
+			std::reverse(hex.begin(), hex.end());
 		}
+
+		void
+		initFromString(string in) {
+			string hexIn = "";
+
+			if( in.substr(0,2) == "0x" ) {
+				hexIn = in.substr(2);
+			} else {
+				ConvertDecToHex(in, hexIn);
+			}
+			
+			//Process hex string
+			int64_t length = hexIn.length();
+				
+			while( length != 0 ) {
+				if( length - MAX_DIGIT_HEX > 0 ) {
+					value.push_back(strtol( hexIn.substr( length - MAX_DIGIT_HEX, MAX_DIGIT_HEX ).c_str(), NULL, 16));
+				} else {
+					value.push_back(strtol( hexIn.substr( 0, length ).c_str(), NULL, 16));
+					break;
+				}
+				length -= MAX_DIGIT_HEX;
+			}
+		}
+
+
+		size_t
+		getNumberOfHexDigits() {
+			size_t num = (value.size()-1) * 8; //4 bytes per entry, so 8 hex values
+			uint32_t back = value.back();
+
+			size_t backSize = 0;
+			while( back != 0 ) {
+				backSize++;
+				back = back >> 4;
+			}
+
+			return num + backSize;
+		}
+
+		//Zero hex based where 0 returns most significant value.
+		uint8_t
+		getHexValueAt(uint64_t idx) {
+			size_t numDigits = getNumberOfHexDigits();
+			size_t revIdx = numDigits - idx - 1;
+
+			size_t out = revIdx / 8;
+			size_t in  = revIdx % 8;
+
+			uint32_t val = value[out];
+			for( int i = 0; i < in; ++i ) {
+				val = val >> 4;
+			}
+			return val & 0xF;
+		}
+
+		void prepend( uint32_t a ) {
+			value.push_back( a );
+		}
+
+		void append( uint32_t a ) {
+			value.insert( value.begin(), a );
+		}
+
+		static BigUInt
+		LeftShift( BigUInt &a ) {
+			BigUInt ret = a;
+			
+			bool addEntry = false;
+			auto i = ret.value.rbegin();
+			auto end = ret.value.rend();
+			auto next = ret.value.rbegin();
+			next++;
+			uint32_t carry = 0;
 		
+			//Overflow into new entry
+			if( (*i) & 0x80000000 ) {
+				addEntry = true;	
+			}
+
+			while( i != end ) {
+
+				if( next != end && (*next) & 0x80000000 ){
+					carry = 1;	
+				} else {
+					carry = 0;
+				}
+
+				*i = (*i) << 1;
+				*i = *i + carry;
+
+				i++;
+				next++;
+			}
+
+			if( addEntry ) {
+				ret.prepend(0x1);
+			}
+
+			return ret;
+		}
+	
+		static BigUInt
+		RightShift( BigUInt &a ) {
+			BigUInt ret = a;
+
+			auto i = ret.value.begin();
+			auto end = ret.value.end();
+			auto next = ret.value.begin();
+			next++;
+			uint32_t carry = 0;
+
+			while( i != end ) {
+
+				if( next!= end && (*next) & 0x1 ){
+					carry = 0x80000000;	
+				} else {
+					carry = 0;
+				}
+
+				*i = (*i) >> 1;
+				*i = *i + carry;
+
+				i++;
+				next++;
+			}
+			
+			return ret;
+		}
 		static BigUInt
 		Mul_u32int( BigUInt &a, uint32_t b ) {
+			
 			BigUInt ret;
+
+			if( b == 2 ) {
+				ret = a << 1;
+				return ret;
+			}
+
+			uint64_t bv = b;
 			uint64_t carry = 0;	
 
-			for( auto i : a.value ) {
-				uint64_t value = i * b + carry;
-
-				ret.value.push_back(value % MAX_LIMIT);
-				carry = value / MAX_LIMIT;
+			//Starting from LSB, so prepend values
+			for( uint64_t i : a.value ) {
+				uint64_t value = i * bv + carry;
+				carry = value >> 32;
+				ret.prepend(value & UINT64_LOW);
 			}
 
 			if( carry ) {
-				ret.value.push_back(carry);
+				ret.prepend(carry);
 			}
 			return ret;
 
@@ -161,12 +421,12 @@ class BigUInt {
 			if ( a.value.size() > b.value.size() ) {
 				int diff = (a.value.size() - b.value.size());
 				for ( int i = 0; i < diff; ++i ) {
-					b.value.push_back(0);
+					b.prepend(0);
 				}
 			} else {
 				int diff = (b.value.size() - a.value.size());
 				for ( int i = 0; i < diff; ++i ) {
-					a.value.push_back(0);
+					a.prepend(0);
 				}
 			}
 			return a.value.size();
@@ -194,7 +454,12 @@ class BigUInt {
 		LongDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
 			BigUInt ret((uint64_t)0);
 
-			size_t Nsize = N.getNumberOfDigits();
+			if( D == 2 && mod == false) {
+				ret = N >> 1;
+				return ret;
+			}
+
+			size_t Nsize = N.getNumberOfHexDigits();
 
 			BigUInt Npart( (uint64_t)0 );
 		
@@ -209,11 +474,11 @@ class BigUInt {
 						solved = true;
 						break;
 					} else {
-						Npart = Npart * 10;
-						Npart = Npart + N[idx++];
+						Npart = Npart << 4;
+						Npart = Npart + N.getHexValueAt(idx++);
 
-						//Add digit to result
-						ret = ret * 10;
+						//Add digit to result (below)
+						ret = ret << 4;
 					}
 				}
 				
@@ -225,23 +490,29 @@ class BigUInt {
 					}
 				}
 
-				//till it goes over D
-				size_t Qpart = 1;
 				BigUInt Dmult = D;
-				while(true) {
-					if( Dmult < Npart ) {
-						Dmult = D * ++Qpart;
-					} else {
-						break;
+				if( Dmult == Npart ) {
+					Npart = (uint64_t)0;
+					ret = ret + 1;
+				} else {
+
+					//till it goes over D
+					size_t Qpart = 1;
+					while(true) {
+						if( Dmult < Npart ) {
+							Dmult = D * ++Qpart;
+						} else {
+							break;
+						}
 					}
+					Dmult = D * --Qpart;
+
+					//Remainder
+					Npart = Npart - Dmult;
+
+					//Put value in result.
+					ret = ret + Qpart;
 				}
-				Dmult = D * --Qpart;
-
-				//Remainder
-				Npart = Npart - Dmult;
-
-				//Put value in result.
-				ret = ret + Qpart;
 			}
 		}
 
@@ -281,11 +552,11 @@ class BigUInt {
 			zdiff = zdiff - z0;
 
 			for (int i = 0; i < m2 * 2; i++) {
-				z2.insertAt(0, 0);
+				z2.append(0);
 			}
 
 			for (int i = 0; i < m2; i++) {
-				zdiff.insertAt(0, 0);
+				zdiff.append(0);
 			}
 		
 			ret = z2 + zdiff;
@@ -297,7 +568,6 @@ class BigUInt {
 			return ret;
 
 		}
-	
 
 	friend bool operator==( BigUInt &a, BigUInt &b );
 	friend bool operator==( BigUInt &a, uint32_t b );
@@ -306,6 +576,8 @@ class BigUInt {
 	friend bool operator< (BigUInt &a, uint32_t b);
 	friend bool operator> (BigUInt &a, uint32_t b);
 	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
+	friend BigUInt operator <<( BigUInt &a, uint64_t b );
+	friend BigUInt operator >>( BigUInt &a, uint64_t b );
 	friend BigUInt operator+( BigUInt &a, BigUInt &b );
 	friend BigUInt operator+( BigUInt &a, uint32_t b );
 	friend BigUInt operator-( BigUInt &a, BigUInt &b );
@@ -319,6 +591,26 @@ class BigUInt {
 	friend BigUInt operator%( BigUInt &a, BigUInt &b );
 	friend BigUInt operator%( BigUInt &a, uint32_t b );
 };
+
+BigUInt
+operator>>( BigUInt &a, uint64_t b ) {
+	BigUInt ret = a;
+	for( uint64_t i = 0; i < b; ++i) {
+		ret = BigUInt::RightShift(ret);
+	}
+	BigUInt::unpad(ret);
+	return ret;
+}
+
+BigUInt
+operator<<( BigUInt &a, uint64_t b ) {
+	BigUInt ret = a;
+	for( uint64_t i = 0; i < b; ++i) {
+		ret = BigUInt::LeftShift(ret);
+	}
+	return ret;
+
+}
 
 BigUInt
 operator%( BigUInt &a, BigUInt &b ) {
@@ -410,8 +702,11 @@ operator-( BigUInt &a, BigUInt &b ) {
 	bool borrow = false;
 	int64_t result  = 0;
 
+	//Going through backwards, so prepend
 	for (; i < size; i++) {
-		result = a.value[i] - b.value[i];
+		uint64_t av = a.value[i];
+		uint64_t bv = b.value[i];
+		result = av - bv;
 		if( borrow ) {
 			result -= 1;
 			borrow = false;
@@ -422,13 +717,12 @@ operator-( BigUInt &a, BigUInt &b ) {
 			borrow = true;
 		}
 
-		ret.insertAt(i, result % MAX_LIMIT);
+		ret.prepend( result % MAX_LIMIT );
 	}
 
 	if( borrow ) {
-		ret.insertAt(i, 
-					ret.value[i] - 1
-				);
+		uint64_t v = ret.value[i];
+		ret.prepend( v - 1 );
 	}
 
 	BigUInt::unpad(a, b);
@@ -449,15 +743,20 @@ operator+( BigUInt &a, BigUInt &b ) {
 	uint64_t carry = 0;
 	uint64_t i = 0;
 	uint64_t result  = 0;
+	uint64_t av = 0;
+	uint64_t bv = 0;
 
+	//Going through backwards, so prepend
 	for (; i < size; i++) {
-		result = b.value[i] + a.value[i] + carry;
-		ret.insertAt(i, result % MAX_LIMIT);
+		av = a.value[i];
+		bv = b.value[i];
+		result = av + bv + carry;
+		ret.prepend( result % MAX_LIMIT );
 		carry = result / MAX_LIMIT;
 	}
 
 	if ( carry != 0 ) {
-		ret.insertAt(i, carry);
+		ret.prepend( carry );
 	}
 
 	BigUInt::unpad(a, b);
@@ -466,26 +765,8 @@ operator+( BigUInt &a, BigUInt &b ) {
 
 std::ostream&
 operator <<(std::ostream& stream, const BigUInt& a) {
-
-	auto rbeg = a.value.rbegin();
-    auto rend = a.value.rend();
-
-	bool isFirst = true;
-	while( rbeg != rend ) {
-		if( *rbeg != 0 ) {
-			if( !isFirst ) {
-				stream << std::setfill('0') << std::setw(MAX_DIGIT) << *rbeg;
-			} else {
-				stream << *rbeg;
-				isFirst = false;
-			}
-		} else {
-			stream << "000000000";
-		}
-
-		rbeg++;
-	}
-
+	string outs = a.toString();
+	stream << outs;
 	return stream;
 }
 
@@ -494,7 +775,9 @@ operator*( BigUInt &a, BigUInt &b ) {
 	if( (a.value.size() == 1 && a.value[0] == 0) || (b.value.size() == 1 && b.value[0] == 0) ) {
 		return (uint64_t)0;			
 	} else if (a.value.size() == 1 && b.value.size() == 1 ) {
-		return BigUInt((uint64_t)(a.value[0] * b.value[0]));
+		uint64_t av = a.value[0];
+		uint64_t bv = b.value[0];
+		return BigUInt(av * bv);
 	} else if (  a.value.size() == 1 || b.value.size() == 1 ) {
 		if ( a.value.size() == 1 ) {
 			return BigUInt::Mul_u32int( b, a.value[0] );

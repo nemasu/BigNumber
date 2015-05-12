@@ -7,6 +7,18 @@ using std::cout;
 using std::endl;
 
 void
+check( string test, BigUInt value, uint64_t correct ) {
+	BigUInt answer(correct);
+	cout << test << ": ";
+	if( value == answer ) {
+		cout << "PASS";
+	} else {
+		cout << "FAIL; Got: " << value << ", expected: " << answer;
+
+	}
+	cout << endl;
+}
+void
 check( string test, bool value, bool answer ) {
 	cout << test << ": ";
 	if( value == answer ) {
@@ -17,6 +29,7 @@ check( string test, bool value, bool answer ) {
 	}
 	cout << endl;
 }
+
 void
 check( string test, BigUInt &value, string answer ) {
 	BigUInt correct(answer);
@@ -70,31 +83,84 @@ test_mod() {
 }
 
 void
-test_div2() {
-	BigUInt x1("1234567899990274058280457");
-	BigUInt x2("2");
+test_rsh() {
+	BigUInt x1(0x99999999);
 
-	BigUInt result = x1 / x2;
+	BigUInt result = x1 >> 1;
 
-	check("test_div2", result, "617283949995137029140228");
+	check("test_rsh", result, 0x4CCCCCCC);
 }
 
 void
+test_lsh() {
+	BigUInt x1(0x99999999);
+
+	BigUInt result = x1 << 1;
+
+	check("test_lsh", result, 0x133333332);
+}
+
+
+void
 test_div() {
+	BigUInt x1(100);
+	BigUInt x2(50);
+
+	BigUInt result = x1 / x2;
+
+	check("test_div (half)", result, 2);
+
+	x1 = 100;
+	x2 = 100;
+	result = x1 / x2;
+
+	check("test_div (same)", result, 1);
+
+	x1 = 123456789;
+	x2 = 675;
+	result = x1 / x2;
+
+	check("test_div (odd)", result, 182898);
+
+	uint64_t l = 2452466892468925684;
+	uint64_t r = 458248598258;
+
+	x1 = l;
+	x2 = r;
+	result = x1 / x2;
+
+	check("test_div (large)", result, (uint64_t) l / r);
+
+}
+
+void
+test_harddiv() {
 	BigUInt x1("1234567899990274058280457");
 	BigUInt x2("4057280475247582");
 
 	BigUInt result = x1 / x2;
 
-	check("test_div", result, "304284583");
+	check("test_harddiv", result, "304284583");
 }
 
 void
 test_stringctor() {
-	BigUInt x1 ("123456789999027458280457");
-	stringstream ss;
-	ss << x1;
-	check("test_stringctor", ss.str() == "123456789999027458280457", true);
+
+	BigUInt x1 ("1234567890");
+	stringstream ss1;
+	ss1 << x1;
+	check("test_stringctor", ss1.str() == "1234567890", true);
+
+	BigUInt x2 ("12345678903");
+	stringstream ss2;
+	ss2 << x2;
+	check("test_stringctor2", ss2.str() == "12345678903", true);
+
+
+	BigUInt x3 ("123456789999027458280457");
+	stringstream ss3;
+	ss3 << x3;
+	check("test_stringctor3", ss3.str() == "123456789999027458280457", true);
 }
 
 void
@@ -107,39 +173,23 @@ test_lt() {
 	x1 = "1234567899990274058280456";
 	x2 = "1234567899990274058280457";
 	
-	check("test_lt", x1 < x2, true);
+	check("test_lt2", x1 < x2, true);
 
 	x1 = "1234567899990274058280457";
 	x2 = "2234567899990274058280457";
 	
-	check("test_lt", x1 < x2, true);
+	check("test_lt3", x1 < x2, true);
 
 	x1 = "123456789999027405828045700000";
 	x2 = "1234567899990274058280457";
 	
-	check("test_lt", x1 < x2, false);
+	check("test_lt4", x1 < x2, false);
 
 	x1 = "1234567899990";
 	x2 = "4057280475247582";
 	
-	check("test_lt", x1 < x2, true);
+	check("test_lt5", x1 < x2, true);
 
-
-}
-
-void
-test_at() {
-	BigUInt x1("12345678999902740582804572");
-	
-	BigUInt result1 = x1[13];
-	BigUInt result2 = x1[0];
-	BigUInt result3 = x1[25];
-	BigUInt result4 = x1[8];
-	
-	check("test_at", result1, "2");
-	check("test_at", result2, "1");
-	check("test_at", result3, "2");
-	check("test_at", result4, "9");
 }
 
 void
@@ -154,7 +204,6 @@ test_exp() {
 
 void
 test_add() {
-	
 	BigUInt x1(131185607);
 	BigUInt x2(592432186);
 	BigUInt x3(840600773);
@@ -168,29 +217,75 @@ test_add() {
 	total = total + x5;
 	total = total + x6;
 
-	check("test_add", total, "3115992536");
+	check("test_add", total, 3115992536);
+	
+	BigUInt total2((uint64_t)0);
+	uint64_t r = 3115992536;
+	uint64_t l = 7290;
+	BigUInt toadd(r);
+	for( uint64_t i= 0; i < l; ++i ) {
+		total2 = total2 + toadd;
+	}
+
+	check("test_add2", total2, (uint64_t)r * l);
 }
 
 void
 test_sub() {
 
-	BigUInt x1("1208609638235972680");
-	BigUInt x2("77718575926746902");
+	BigUInt x1(1208609638235972680);
+	BigUInt x2(77718575926746902);
 	
 	BigUInt total = x1 - x2;
 
-	check("test_sub", total, "1130891062309225778");
+	check("test_sub", total, 1130891062309225778);
+	
+	x1 = 0x2208E9A51D0;
+	x2 = 0x21578B97EBA;
+
+	total = x1 - x2;
+		
+	check("test_sub2", total, 0xB15E0D316);
 
 }
 
 void
 test_easymul() {
-	BigUInt x1("12345678901234567890");
-	uint32_t b = 999999999;
+	BigUInt x1(240404546);
+	uint32_t b = 341201;
 
 	x1 = x1 * b;
 
-	check("test_easymul", x1, "12345678888888888988765432110");
+	check("test_easymul", x1, 82026271499746);
+
+	x1 = 1582474798;
+	BigUInt x2 = 1445525157;
+
+	x1 = x1 * x2;
+
+	check("test_easymul2", x1, 2287507130827493286);
+
+	x1 = 458248598258;
+	x2 = 2;
+
+	x1 = x1 * x2;
+	
+	check("test_easymul3", x1, 916497196516);
+
+	x1 = 0x2208E9A51D0;
+	x2 = 0x5;
+
+	x1 = x1 * x2;
+	
+	check("test_easymul4", x1, 0xAA2C9039910);
+
+	x1 = 12345678903;
+	x2 = 16;
+
+	x1 = x1 * x2;
+
+	check("test_easymul5", x1, 197530862448);
+
 }
 
 void
@@ -208,16 +303,18 @@ test_hardmul() {
 
 int
 main( int argv, char **argc ) {
-	test_stringctor();
+
 	test_add();
 	test_sub();
+	test_rsh();
+	test_lsh();
 	test_easymul();
-	test_hardmul();
-	test_exp();
-	test_at();
-	test_lt();
 	test_div();
-	test_div2();
+	test_stringctor();
+	test_hardmul();
+	test_harddiv();
+	test_exp();
+	test_lt();
 	test_mod();
 	test_hardmod();
 	test_modexp();
