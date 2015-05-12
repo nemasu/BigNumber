@@ -91,7 +91,7 @@ class BigUInt {
 					ret = (ret * base);
 					ret = ret % mod;
 				}
-				exp = exp >> 1;
+				exp = exp >> 1; // exp / 2
 				base = base * base;
 				base = base % mod;
 			}
@@ -175,7 +175,7 @@ class BigUInt {
 					dec.push_back( (char)value.toUint64() );
 					carry = carry / 10;
 				}
-				pow = pow * 16;
+				pow = pow << 4; //pow * 16
 			}
 
 			//Remove leading(trailing) zeros
@@ -231,12 +231,12 @@ class BigUInt {
 					value = result % 16;
 					hexVal = (char)value.toUint64();
 					
-					carry = result / 16;
+					carry = result >> 4; // result / 16
 				}
 				while( carry > 0 ) {
 					value = carry % 16;
 					hex.push_back( (char)value.toUint64() );
-					carry = carry / 16;
+					carry = carry >> 4; // carry / 16
 				}
 
 				pow = pow * 10;
