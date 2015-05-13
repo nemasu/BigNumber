@@ -490,6 +490,7 @@ class BigUInt {
 				//TODO this is kind of ugly
 				//maybe cleaner solution when half < 5
 				if( half < 5 ) {
+					max = max + 1;
 					while( min != max ) {
 						result = min * D;
 						if( N == result ) {
