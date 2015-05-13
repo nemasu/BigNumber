@@ -101,34 +101,11 @@ class BigUInt {
 
 		string
 		toString() const {
-			string hexIn = toHexString();
-			string dec;
-			ConvertHexToDec( hexIn, dec );
-			return dec;
-		}
-
-		string
-		toHexString() const {
-			std::stringstream ss;
-			auto i = value.rbegin();
-			auto end = value.rend();
-			while( i != end ) {
-				ss << std::hex << *i;
-				i++;
-			}
-			return ss.str();
-
-		}
-	private:
-		//Stores value in reverse
-		vector<uint32_t> value;
-
-		static void
-		ConvertHexToDec( string &hex, string &dec ) {
-			dec = hex;
+			string hex = toHexString();
+			string dec = hex;
 
 			if( dec == "0" ) {
-				return;
+				return dec;
 			}
 
 			for( auto &x : dec ) {
@@ -188,101 +165,99 @@ class BigUInt {
 					decVal += '0';
 				} else {
 					std::cerr << "Invalid character in string: " << decVal << std::endl;
-					return;
+					return "";
 				}
 			}
 
 			std::reverse(dec.begin(), dec.end());
+			return dec;
+		}
+
+		string
+		toHexString() const {
+			std::stringstream ss;
+			auto i = value.rbegin();
+			auto end = value.rend();
+			while( i != end ) {
+				ss << std::hex << *i;
+				i++;
+			}
+			return ss.str();
 
 		}
 
-		static void
-		ConvertDecToHex( string &dec, string &hex ) {
-			hex = dec;
+		BigUInt&
+		operator+=( BigUInt &b ) {
+			this->value.reserve(this->value.size() + b.value.size() + 1);
+			uint64_t size = Pad(*this, b);
+			uint64_t carry = 0;
+			uint64_t i = 0;
+			uint64_t result  = 0;
+			uint64_t av = 0;
+			uint64_t bv = 0;
 
-			if( hex == "0" ) {
-				return;
+			//Going through backwards, so prepend
+			for (; i < size; i++) {
+				av = this->value[i];
+				bv = b.value[i];
+				result = av + bv + carry;
+				value[i] = result % MAX_LIMIT;
+				carry = result / MAX_LIMIT;
 			}
 
-			for( auto &x : hex ) {
-				x = 0;
+			while ( carry > 0 ) {
+				prepend( carry % MAX_LIMIT );
+				carry = carry / MAX_LIMIT;
 			}
 
-			BigUInt pow(1);
-			BigUInt result((uint64_t)0);
-			BigUInt value((uint64_t)0);
-			BigUInt carry((uint64_t)0);
-			BigUInt hexV((uint64_t)0);
-
-			string revIn = dec;
-			std::reverse(revIn.begin(), revIn.end());
-			for( auto decVal : revIn ) {
-				carry = decVal - '0';
-				carry = carry * pow;
-				if( carry == 0 && pow == 1) {
-					carry = (uint64_t)0;
-				}
-				for( auto &hexVal : hex ) {
-					if( carry == 0 && hexVal == 0  ) {
-						continue;
-					}
-					hexV = hexVal;
-					result = hexV + carry;
-					value = result % 16;
-					hexVal = (char)value.toUint64();
-					
-					carry = result >> 4; // result / 16
-				}
-				while( carry > 0 ) {
-					value = carry % 16;
-					hex.push_back( (char)value.toUint64() );
-					carry = carry >> 4; // carry / 16
-				}
-
-				pow = pow * 10;
-			}
-			
-			//Remove leading(trailing) zeros
-			while( hex.back() == 0 ) {
-				hex.pop_back();
-			}
-
-			for ( auto &hexVal : hex ) {
-				if( hexVal >= 0 && hexVal <= 9 ) {
-					hexVal += '0';
-				} else if ( hexVal >= 0xA && hexVal <= 0xF ) {
-					hexVal += 'A' - 0xA;
-				} else {
-					std::cerr << "Invalid character in string: 0x" << std::hex << hexVal << std::endl;
-					return;
-				}
-			}
-
-			std::reverse(hex.begin(), hex.end());
+			BigUInt::Unpad(*this, b);
+			return *this;
 		}
+
+	private:
+		//Stores value in reverse
+		vector<uint32_t> value;
 
 		void
 		initFromString(string in) {
-			string hexIn = "";
+			string process = in;
+			BigUInt pow(1);
+			BigUInt result((uint64_t)0);
+			uint8_t e;
 
-			if( in.substr(0,2) == "0x" ) {
-				hexIn = in.substr(2);
-			} else {
-				ConvertDecToHex(in, hexIn);
-			}
-			
-			//Process hex string
-			int64_t length = hexIn.length();
-				
-			while( length != 0 ) {
-				if( length - MAX_DIGIT_HEX > 0 ) {
-					value.push_back(strtol( hexIn.substr( length - MAX_DIGIT_HEX, MAX_DIGIT_HEX ).c_str(), NULL, 16));
-				} else {
-					value.push_back(strtol( hexIn.substr( 0, length ).c_str(), NULL, 16));
-					break;
+			if( process.substr(0,2) == "0x" ) {
+				e = 0x10;
+				process = process.substr(2);
+				std::transform( process.begin(), process.end(), process.begin(), ::toupper );
+
+				for( auto &hexIn : process ) {
+					if( hexIn >= '0' && hexIn <= '9' ) {
+						hexIn -= '0';
+					} else if( hexIn >= 'A' && hexIn <= 'F' ) {
+						hexIn -= 55;							
+					} else {
+						std::cerr << "Error in string - invalid character: " << hexIn << std::endl;
+					}
 				}
-				length -= MAX_DIGIT_HEX;
+			} else {
+				e = 10;
+	
+				for( auto &numIn : process ) {
+					if( numIn >= '0' && numIn <= '9' ) {
+						numIn -= '0';
+					} else {
+						std::cerr << "Error in string - invalid character: " << numIn << std::endl;
+					}
+				}
 			}
+
+			std::reverse( process.begin(), process.end() );
+			for( auto c : process ) {
+				result = pow * c;
+				*this += result;
+				pow = pow * e;
+			}
+
 		}
 
 
@@ -401,10 +376,11 @@ class BigUInt {
 
 			uint64_t bv = b;
 			uint64_t carry = 0;	
+			uint64_t value = 0;
 
 			//Starting from LSB, so prepend values
 			for( uint64_t i : a.value ) {
-				uint64_t value = i * bv + carry;
+				value = i * bv + carry;
 				carry = value >> 32;
 				ret.prepend(value & UINT64_LOW);
 			}
@@ -417,7 +393,7 @@ class BigUInt {
 		}
 		
 		static uint64_t	
-		pad( BigUInt &a, BigUInt &b ) {
+		Pad( BigUInt &a, BigUInt &b ) {
 			if ( a.value.size() > b.value.size() ) {
 				int diff = (a.value.size() - b.value.size());
 				for ( int i = 0; i < diff; ++i ) {
@@ -433,7 +409,7 @@ class BigUInt {
 		}
 
 		static void
-		unpad( BigUInt &a, BigUInt &b ) {
+		Unpad( BigUInt &a, BigUInt &b ) {
 			while(a.value.back() == 0 && a.value.size() != 1) {
 				a.value.pop_back();
 			}
@@ -444,7 +420,7 @@ class BigUInt {
 		}
 		
 		static void
-		unpad( BigUInt &a ) {
+		Unpad( BigUInt &a ) {
 			while(a.value.back() == 0 && a.value.size() != 1) {
 				a.value.pop_back();
 			}
@@ -528,7 +504,7 @@ class BigUInt {
 			
 			BigUInt ret;
 
-			uint64_t m = pad(a, b);
+			uint64_t m = Pad(a, b);
 			uint64_t m2 = m/2;
 
 			ret.value.reserve(m*2);
@@ -562,8 +538,8 @@ class BigUInt {
 			ret = z2 + zdiff;
 			ret = ret + z0;
 
-			unpad(a, b);
-			unpad(ret);
+			Unpad(a, b);
+			Unpad(ret);
 
 			return ret;
 
@@ -598,7 +574,7 @@ operator>>( BigUInt &a, uint64_t b ) {
 	for( uint64_t i = 0; i < b; ++i) {
 		ret = BigUInt::RightShift(ret);
 	}
-	BigUInt::unpad(ret);
+	BigUInt::Unpad(ret);
 	return ret;
 }
 
@@ -696,7 +672,7 @@ operator-( BigUInt &a, uint32_t bv ) {
 BigUInt
 operator-( BigUInt &a, BigUInt &b ) {
 	BigUInt ret;
-	uint64_t size = BigUInt::pad(a, b);
+	uint64_t size = BigUInt::Pad(a, b);
 	ret.value.reserve(size);
 	uint64_t i = 0;
 	bool borrow = false;
@@ -725,7 +701,7 @@ operator-( BigUInt &a, BigUInt &b ) {
 		ret.prepend( v - 1 );
 	}
 
-	BigUInt::unpad(a, b);
+	BigUInt::Unpad(a, b);
 	return ret;
 }
 
@@ -739,7 +715,7 @@ BigUInt
 operator+( BigUInt &a, BigUInt &b ) {
 	BigUInt ret;
 	ret.value.reserve(a.value.size() + b.value.size() + 1);
-	uint64_t size = BigUInt::pad(a, b);
+	uint64_t size = BigUInt::Pad(a, b);
 	uint64_t carry = 0;
 	uint64_t i = 0;
 	uint64_t result  = 0;
@@ -759,7 +735,7 @@ operator+( BigUInt &a, BigUInt &b ) {
 		ret.prepend( carry );
 	}
 
-	BigUInt::unpad(a, b);
+	BigUInt::Unpad(a, b);
 	return ret;
 }
 
