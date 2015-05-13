@@ -81,6 +81,18 @@ class BigUInt {
 
 		static BigUInt
 		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
+			BigUInt c = 1;
+			BigUInt ep = (uint64_t)0;
+			while( ep != inExp ) {
+				c = c * inBase;
+				c = c % mod;
+				ep = ep + 1;
+			}
+
+			return c;
+			
+			//TODO get below working, should be faster
+			/*
 			BigUInt ret = 1;
 			BigUInt base = inBase % mod;
 			BigUInt exp = inExp;
@@ -88,7 +100,7 @@ class BigUInt {
 			while( exp > 0 ) {
 				BigUInt check1 = exp % 2;
 				if( check1 == 1 ){
-					ret = (ret * base);
+					ret = ret * base;
 					ret = ret % mod;
 				}
 				exp = exp >> 1; // exp / 2
@@ -97,6 +109,7 @@ class BigUInt {
 			}
 
 			return ret;
+			*/
 		}
 
 		string
@@ -427,6 +440,89 @@ class BigUInt {
 		}
 
 		static BigUInt
+		DACDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
+			BigUInt ret((uint64_t)0);
+			if( D == 2 && mod == false) {
+				ret = N >> 1;
+				return ret;
+			}
+			if( D == N ) {
+				ret = 1;
+				return ret;
+			}
+
+			if( N < D ) {
+				if( mod ) {
+					return N;
+				} else {
+					ret = (uint64_t) 0;
+					return ret;
+				}
+			}
+			
+			BigUInt max = N;
+			BigUInt min = 1;
+
+			BigUInt half = max - min;
+			half = half >> 1;
+			half += min;
+
+			while(true) {
+				BigUInt result = half * D;
+				
+				if( result == N ) {
+					if( !mod ) {
+						return half;
+					} else {
+						BigUInt ret((uint64_t)0);
+						return ret;
+					}
+				}
+
+				if( N < result ) {
+					max = half;
+				} else if( result < N ){
+					min = half;
+				}
+
+				half = max - min;
+
+				//TODO this is kind of ugly
+				//maybe cleaner solution when half < 5
+				if( half < 5 ) {
+					while( min != max ) {
+						result = min * D;
+						if( N == result ) {
+							if( !mod ) {
+								return min;
+							} else {
+								BigUInt ret((uint64_t)0);
+								return ret;
+							}
+						} else if( N < result ) {
+							BigUInt ret;
+							if( !mod ) {
+								ret = min - 1;
+								return ret;
+							} else {
+								min = min - 1;
+								result = min * D;
+								BigUInt ret = N - result;
+								return ret;
+							}
+						}
+						min = min + 1;
+
+					}
+				}
+
+				half = half >> 1; // half / 2
+				half += min;
+			}
+
+		}
+
+		static BigUInt
 		LongDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
 			BigUInt ret((uint64_t)0);
 
@@ -474,6 +570,7 @@ class BigUInt {
 
 					//till it goes over D
 					size_t Qpart = 1;
+
 					while(true) {
 						if( Dmult < Npart ) {
 							Dmult = D * ++Qpart;
@@ -595,7 +692,7 @@ operator%( BigUInt &a, BigUInt &b ) {
 		return ret;
 	}
 
-	return BigUInt::LongDivide(a, b, true);
+	return BigUInt::DACDivide(a, b, true);
 }
 
 BigUInt
@@ -612,7 +709,7 @@ operator/( BigUInt &a, BigUInt &b ) {
 		return ret;
 	}
 
-	return BigUInt::LongDivide(a, b);
+	return BigUInt::DACDivide(a, b);
 }
 
 BigUInt
@@ -702,6 +799,7 @@ operator-( BigUInt &a, BigUInt &b ) {
 	}
 
 	BigUInt::Unpad(a, b);
+	BigUInt::Unpad(ret);
 	return ret;
 }
 

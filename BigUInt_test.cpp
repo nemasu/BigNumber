@@ -247,6 +247,14 @@ test_sub() {
 		
 	check("test_sub2", total, 0xB15E0D316);
 
+	x1 = 0x10000000000;
+	x2 = 0x1;
+
+	total = x1 - x2;
+		
+	check("test_sub3", total, 0xFFFFFFFFFF);
+
+
 }
 
 void
