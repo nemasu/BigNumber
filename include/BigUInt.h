@@ -81,18 +81,6 @@ class BigUInt {
 
 		static BigUInt
 		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
-			BigUInt c = 1;
-			BigUInt ep = (uint64_t)0;
-			while( ep != inExp ) {
-				c = c * inBase;
-				c = c % mod;
-				ep = ep + 1;
-			}
-
-			return c;
-			
-			//TODO get below working, should be faster
-			/*
 			BigUInt ret = 1;
 			BigUInt base = inBase % mod;
 			BigUInt exp = inExp;
@@ -109,7 +97,6 @@ class BigUInt {
 			}
 
 			return ret;
-			*/
 		}
 
 		string
@@ -447,8 +434,13 @@ class BigUInt {
 				return ret;
 			}
 			if( D == N ) {
-				ret = 1;
-				return ret;
+				if( !mod ) {
+					ret = 1;
+					return ret;
+				} else {
+					ret = (uint64_t)0;
+					return ret;
+				}
 			}
 
 			if( N < D ) {
