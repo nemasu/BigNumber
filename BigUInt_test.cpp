@@ -88,6 +88,14 @@ test_mod() {
 
 	check("test_mod2", result, 1);
 
+	x1 = 2520;
+	x2 = 10;
+
+	result = x1 % x2;
+
+	check("test_mod3", result, 0);
+
+
 }
 
 void
@@ -319,7 +327,7 @@ test_hardmul() {
 
 int
 main( int argv, char **argc ) {
-
+	
 	test_add();
 	test_sub();
 	test_rsh();
@@ -329,9 +337,9 @@ main( int argv, char **argc ) {
 	test_stringctor();
 	test_hardmul();
 	test_harddiv();
+	test_mod();
 	test_exp();
 	test_lt();
-	test_mod();
 	test_hardmod();
 	test_modexp();
 	test_hardmodexp();

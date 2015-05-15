@@ -114,7 +114,7 @@ class BigUInt {
 
 			BigUInt pow(1);
 			BigUInt result((uint64_t)0);
-			BigUInt value((uint64_t)0);
+			BigUInt newValue((uint64_t)0);
 			BigUInt carry((uint64_t)0);
 			BigUInt decV((uint64_t)0);
 
@@ -142,14 +142,14 @@ class BigUInt {
 					}
 					decV = decVal;
 					result = decV + carry;
-					value = result % 10;
-					decVal = (char)value.toUint64();
+					newValue = result % 10;
+					decVal = (char)newValue.toUint64();
 					carry = result / 10;
 				}
 								
 				while( carry > 0 ) {
-					value = carry % 10;
-					dec.push_back( (char)value.toUint64() );
+					newValue = carry % 10;
+					dec.push_back( (char)newValue.toUint64() );
 					carry = carry / 10;
 				}
 				pow = pow << 4; //pow * 16
@@ -164,7 +164,7 @@ class BigUInt {
 				if( decVal >= 0 && decVal <= 9 ) {
 					decVal += '0';
 				} else {
-					std::cerr << "Invalid character in string: " << decVal << std::endl;
+					std::cerr << "Invalid character in string: " << "0x" << std::hex << decVal << std::endl;
 					return "";
 				}
 			}
@@ -273,22 +273,6 @@ class BigUInt {
 			}
 
 			return num + backSize;
-		}
-
-		//Zero hex based where 0 returns most significant value.
-		uint8_t
-		getHexValueAt(uint64_t idx) {
-			size_t numDigits = getNumberOfHexDigits();
-			size_t revIdx = numDigits - idx - 1;
-
-			size_t out = revIdx / 8;
-			size_t in  = revIdx % 8;
-
-			uint32_t val = value[out];
-			for( int i = 0; i < in; ++i ) {
-				val = val >> 4;
-			}
-			return val & 0xF;
 		}
 
 		void prepend( uint32_t a ) {
@@ -427,33 +411,35 @@ class BigUInt {
 		}
 
 		static BigUInt
-		DACDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
+		DACDivide( BigUInt &N, BigUInt &D, BigUInt *pRemain = NULL ) {
 			BigUInt ret((uint64_t)0);
-			if( D == 2 && mod == false) {
+			if( D == 2 && pRemain == NULL) {
 				ret = N >> 1;
 				return ret;
 			}
 			if( D == N ) {
-				if( !mod ) {
-					ret = 1;
-					return ret;
-				} else {
-					ret = (uint64_t)0;
-					return ret;
+				ret = 1;
+				if( pRemain ) {
+					*pRemain = (uint64_t) 0;
 				}
+				return ret;
 			}
 
 			if( N < D ) {
-				if( mod ) {
-					return N;
-				} else {
-					ret = (uint64_t) 0;
-					return ret;
+				ret = (uint64_t) 0;
+				if( pRemain ) {
+					*pRemain = N;
 				}
+				return ret;
 			}
 			
-			BigUInt max = N;
+			BigUInt maxCalc = N.size() - D.size() == 0 ? 0 : ((N.size() - D.size() + 1) * 32);
+			BigUInt max = 0xFFFFFFFF;
+			max =  max << maxCalc;
+
+			BigUInt minCalc = N.size() - D.size() == 0 ? 0 : (N.size() - D.size() - 1) * 32;
 			BigUInt min = 1;
+			min = min << minCalc;
 
 			BigUInt half = max - min;
 			half = half >> 1;
@@ -463,17 +449,15 @@ class BigUInt {
 				BigUInt result = half * D;
 				
 				if( result == N ) {
-					if( !mod ) {
-						return half;
-					} else {
-						BigUInt ret((uint64_t)0);
-						return ret;
+					if( pRemain ) {
+						*pRemain = ret;
 					}
+					return half;
 				}
 
 				if( N < result ) {
 					max = half;
-				} else if( result < N ){
+				} else {
 					min = half;
 				}
 
@@ -486,23 +470,17 @@ class BigUInt {
 					while( min != max ) {
 						result = min * D;
 						if( N == result ) {
-							if( !mod ) {
-								return min;
-							} else {
-								BigUInt ret((uint64_t)0);
-								return ret;
+							if( pRemain ) {
+								*pRemain = (uint64_t)0;
 							}
+							return min;
 						} else if( N < result ) {
-							BigUInt ret;
-							if( !mod ) {
-								ret = min - 1;
-								return ret;
-							} else {
-								min = min - 1;
-								result = min * D;
-								BigUInt ret = N - result;
-								return ret;
+							BigUInt ret = min - 1;
+							if( pRemain ) {
+								result = ret * D;
+								*pRemain = N - result;
 							}
+							return ret;
 						}
 						min = min + 1;
 
@@ -513,73 +491,6 @@ class BigUInt {
 				half += min;
 			}
 
-		}
-
-		static BigUInt
-		LongDivide( BigUInt &N, BigUInt &D, bool mod = false ) {
-			BigUInt ret((uint64_t)0);
-
-			if( D == 2 && mod == false) {
-				ret = N >> 1;
-				return ret;
-			}
-
-			size_t Nsize = N.getNumberOfHexDigits();
-
-			BigUInt Npart( (uint64_t)0 );
-		
-			bool solved = false;
-			size_t idx = 0;
-			while(true) {
-				//Find appropriate Npart
-				while(Npart < D) {
-
-					if( idx + 1 > Nsize) {
-						//Done
-						solved = true;
-						break;
-					} else {
-						Npart = Npart << 4;
-						Npart = Npart + N.getHexValueAt(idx++);
-
-						//Add digit to result (below)
-						ret = ret << 4;
-					}
-				}
-				
-				if( solved ) {
-					if( !mod ) {
-						return ret;
-					} else {
-						return Npart;
-					}
-				}
-
-				BigUInt Dmult = D;
-				if( Dmult == Npart ) {
-					Npart = (uint64_t)0;
-					ret = ret + 1;
-				} else {
-
-					//till it goes over D
-					size_t Qpart = 1;
-
-					while(true) {
-						if( Dmult < Npart ) {
-							Dmult = D * ++Qpart;
-						} else {
-							break;
-						}
-					}
-					Dmult = D * --Qpart;
-
-					//Remainder
-					Npart = Npart - Dmult;
-
-					//Put value in result.
-					ret = ret + Qpart;
-				}
-			}
 		}
 
 		static BigUInt
@@ -642,6 +553,7 @@ class BigUInt {
 	friend bool operator< (BigUInt &a, uint32_t b);
 	friend bool operator> (BigUInt &a, uint32_t b);
 	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
+	friend BigUInt operator <<( BigUInt &a, BigUInt &b );
 	friend BigUInt operator <<( BigUInt &a, uint64_t b );
 	friend BigUInt operator >>( BigUInt &a, uint64_t b );
 	friend BigUInt operator+( BigUInt &a, BigUInt &b );
@@ -669,23 +581,33 @@ operator>>( BigUInt &a, uint64_t b ) {
 }
 
 BigUInt
-operator<<( BigUInt &a, uint64_t b ) {
+operator<<( BigUInt &a, BigUInt &b ) {
 	BigUInt ret = a;
-	for( uint64_t i = 0; i < b; ++i) {
+	for( BigUInt count = b ; count > 0; count = count - 1) {
 		ret = BigUInt::LeftShift(ret);
 	}
 	return ret;
 
 }
 
+
+BigUInt
+operator<<( BigUInt &a, uint64_t bv ) {
+	BigUInt b(bv);
+	return operator<<(a, b);
+
+}
+
 BigUInt
 operator%( BigUInt &a, BigUInt &b ) {
+	BigUInt ret;
 	if( a == 0 ) {
-		BigUInt ret((uint64_t)0);
+		ret = (uint64_t)0;
 		return ret;
 	}
 
-	return BigUInt::DACDivide(a, b, true);
+	BigUInt::DACDivide(a, b, &ret);
+	return ret;
 }
 
 BigUInt
