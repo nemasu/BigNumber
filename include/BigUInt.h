@@ -432,15 +432,19 @@ class BigUInt {
 				}
 				return ret;
 			}
-			
-			BigUInt maxCalc = N.size() - D.size() == 0 ? 0 : ((N.size() - D.size() + 1) * 32);
+	
+			uint64_t nSize = N.size();
+			uint64_t dSize = D.size();
+			uint64_t range = nSize - dSize;
+		
+			BigUInt maxCalc = range ? (range + 1) * 32: 0;
 			BigUInt max = 0xFFFFFFFF;
-			max =  max << maxCalc;
+			max = max << maxCalc;
 
-			BigUInt minCalc = N.size() - D.size() == 0 ? 0 : (N.size() - D.size() - 1) * 32;
+			BigUInt minCalc = range ? (range - 1) * 32 : 0;
 			BigUInt min = 1;
 			min = min << minCalc;
-
+			
 			BigUInt half = max - min;
 			half = half >> 1;
 			half += min;
