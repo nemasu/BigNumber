@@ -619,7 +619,19 @@ operator^( BigUInt &a, BigUInt &b ) {
 
 bool
 operator> (BigUInt &a, uint32_t b) {
-	return a.value.size() == 1 ? a.value[0] > b : false;
+	if( a.value.size() == 1 ) {
+		return a.value[0] > b;
+	}
+
+	if( a.value.size() > 1 ) {
+		return true;
+	}
+
+	if( a.value.size() == 0 ) {
+		std::cerr << "Error: BigUInt::operator> - left hand contains no value" << std::endl;
+	}
+
+	return false;
 }
 
 bool
