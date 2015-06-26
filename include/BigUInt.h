@@ -68,9 +68,9 @@ class BigUInt {
 				ret = value[0];
 				return ret;
 			} else if ( value.size() == 2 ) {
-				ret |= value[0];
-				ret =  ret << 32;
 				ret |= value[1];
+				ret =  ret << 32;
+				ret |= value[0];
 			} else {
 				std::cerr << "Error: Can't convert to uint64, value too large." << std::endl; 
 				return 0;
@@ -81,6 +81,7 @@ class BigUInt {
 
 		static BigUInt
 		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
+			
 			BigUInt ret = 1;
 			BigUInt base = inBase % mod;
 			BigUInt exp = inExp;
@@ -101,76 +102,36 @@ class BigUInt {
 
 		string
 		toString() const {
-			string hex = toHexString();
-			string dec = hex;
 
-			if( dec == "0" ) {
-				return dec;
-			}
+			BigUInt thisCopy = *this;
 
-			for( auto &x : dec ) {
-				x = 0;
-			}
+			std::stringstream ss;
+			string out;
 
-			BigUInt pow(1);
-			BigUInt result((uint64_t)0);
-			BigUInt newValue((uint64_t)0);
-			BigUInt carry((uint64_t)0);
-			BigUInt decV((uint64_t)0);
+			int maxDigit = 18;
+			BigUInt d = 0xDE0B6B3A7640000;
 
-			string revIn = hex;
-			std::reverse(revIn.begin(), revIn.end());
-			std::transform(revIn.begin(), revIn.end(), revIn.begin(), ::toupper);
-			for( auto hexVal : revIn ) {
-				//Convert ascii to real values
-				if( hexVal < 58 ) {
-					carry = hexVal - '0';
-				} else {
-					carry = hexVal - 55;
-				}
+			BigUInt r;
+			while( thisCopy != 0 ) {
+				BigUInt q = DACDivide( thisCopy, d, &r );
 
-				//Multiply to get full value
-				carry = carry * pow;
-				if( carry == 0 && pow == 1) {
-					carry = (uint64_t)0;
-				}
-
-				//Add carry to dec string
-				for( auto &decVal : dec ) {
-					if( carry == 0 && decVal == 0  ) {
-						continue;
+				ss << r.toUint64();
+				
+				string val = ss.str();
+				if( q != 0 ) {
+					while( val.length() != maxDigit ) {
+						val = "0" + val;
 					}
-					decV = decVal;
-					result = decV + carry;
-					newValue = result % 10;
-					decVal = (char)newValue.toUint64();
-					carry = result / 10;
-				}
-								
-				while( carry > 0 ) {
-					newValue = carry % 10;
-					dec.push_back( (char)newValue.toUint64() );
-					carry = carry / 10;
-				}
-				pow = pow << 4; //pow * 16
+				} 
+
+				out = val + out;
+				ss.str(std::string());
+
+				thisCopy = q;
 			}
 
-			//Remove leading(trailing) zeros
-			while( dec.back() == 0 ) {
-				dec.pop_back();
-			}
+			return out;
 
-			for ( auto &decVal : dec ) {
-				if( decVal >= 0 && decVal <= 9 ) {
-					decVal += '0';
-				} else {
-					std::cerr << "Invalid character in string: " << "0x" << std::hex << decVal << std::endl;
-					return "";
-				}
-			}
-
-			std::reverse(dec.begin(), dec.end());
-			return dec;
 		}
 
 		string
@@ -553,6 +514,7 @@ class BigUInt {
 	friend bool operator==( BigUInt &a, BigUInt &b );
 	friend bool operator==( BigUInt &a, uint32_t b );
 	friend bool operator!=( BigUInt &a, BigUInt &b );
+	friend bool operator!=( BigUInt &a, uint32_t b );
 	friend bool operator< (BigUInt &a, BigUInt &b);
 	friend bool operator< (BigUInt &a, uint32_t b);
 	friend bool operator> (BigUInt &a, uint32_t b);
@@ -790,6 +752,12 @@ operator*( BigUInt &a, uint32_t buint ) {
 
 bool
 operator!=( BigUInt &a, BigUInt &b ) {
+	return !operator==(a, b);
+}
+
+bool
+operator!=( BigUInt &a, uint32_t bv ) {
+	BigUInt b(bv);
 	return !operator==(a, b);
 }
 
