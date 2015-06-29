@@ -400,6 +400,33 @@ class BigUInt {
 			}
 		}
 
+		bool
+		isEven() {
+			return value.size() > 0 ? !(0x1 & value[0]) : false;
+		}
+
+		static BigUInt
+		ExpBySquaring( BigUInt &x, BigUInt &n ) {
+
+			if( n == 0 ) {
+				return 1;
+			} else if( n == 1 ) {
+				return x;
+			} else if ( n.isEven() ) {
+				BigUInt newX = x * x;
+				BigUInt newN = n / 2;
+				return ExpBySquaring( newX, newN );
+			} else {
+				BigUInt newX = x * x;
+				BigUInt newN = n - 1;
+				newN = newN / 2;
+				BigUInt ret = ExpBySquaring( newX, newN );
+				ret = ret * x;
+				return ret;
+			}
+
+		}
+
 		static BigUInt
 		BarrettReduction ( BigUInt &N, BigUInt &D, BigUInt *pR = nullptr) {
 
@@ -640,14 +667,7 @@ operator^( BigUInt &a, uint32_t bv ) {
 
 BigUInt
 operator^( BigUInt &a, BigUInt &b ) {
-	BigUInt ret = a;
-	BigUInt count(b-1);
-	while( count > 0  ) {
-		ret = ret * a;
-		count = count - 1;
-	}
-
-	return ret;
+	return BigUInt::ExpBySquaring(a, b);
 }
 
 bool
