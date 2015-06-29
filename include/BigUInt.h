@@ -12,6 +12,8 @@
 #define UINT64_HIGH 0xFFFFFFFF00000000
 #define UINT64_LOW  0xFFFFFFFF
 
+#define BARRETT_THRESHOLD 3
+
 static const char DigitToHex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 using std::vector;
@@ -80,6 +82,46 @@ class BigUInt {
 		}
 
 		static BigUInt
+		DivideWithRemainder( BigUInt &N, BigUInt &D, BigUInt *pR ) {
+			if( D == 0 ) {
+				std::cerr << "Error: Divide by 0." << std::endl;
+				BigUInt ret;
+				return ret;
+			}
+
+			BigUInt ret;
+			if( D == 2 && !pR ) {
+				ret = N >> 1;
+				return ret;
+			}
+			if( D == N ) {
+				ret = 1;
+				if( pR ) {
+					*pR = (uint64_t) 0;
+				}
+				return ret;
+			}
+
+			if( N < D ) {
+				ret = (uint64_t) 0;
+				if( pR ) {
+					*pR = N;
+				}
+				return ret;
+			}
+
+			if( N.size() > BARRETT_THRESHOLD ) {
+				BigUInt barrettCheck = D << 1;
+				if( N < barrettCheck ) {
+					return BigUInt::BarrettReduction(N, D, pR);
+				}
+			}
+
+			return BigUInt::DACDivide(N, D, pR);
+
+		}
+
+		static BigUInt
 		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
 			
 			BigUInt ret = 1;
@@ -112,8 +154,10 @@ class BigUInt {
 			BigUInt d = 0xDE0B6B3A7640000;
 
 			BigUInt r;
+			BigUInt q;
 			while( thisCopy != 0 ) {
-				BigUInt q = DACDivide( thisCopy, d, &r );
+
+				q  = DivideWithRemainder( thisCopy, d, &r );
 
 				ss << r.toUint64();
 				
@@ -219,21 +263,6 @@ class BigUInt {
 				pow = pow * e;
 			}
 
-		}
-
-
-		size_t
-		getNumberOfHexDigits() {
-			size_t num = (value.size()-1) * 8; //4 bytes per entry, so 8 hex values
-			uint32_t back = value.back();
-
-			size_t backSize = 0;
-			while( back != 0 ) {
-				backSize++;
-				back = back >> 4;
-			}
-
-			return num + backSize;
 		}
 
 		void prepend( uint32_t a ) {
@@ -372,27 +401,42 @@ class BigUInt {
 		}
 
 		static BigUInt
-		DACDivide( BigUInt &N, BigUInt &D, BigUInt *pRemain = NULL ) {
-			BigUInt ret((uint64_t)0);
-			if( D == 2 && pRemain == NULL) {
-				ret = N >> 1;
-				return ret;
-			}
-			if( D == N ) {
-				ret = 1;
-				if( pRemain ) {
-					*pRemain = (uint64_t) 0;
-				}
-				return ret;
+		BarrettReduction ( BigUInt &N, BigUInt &D, BigUInt *pR = nullptr) {
+
+			//Calculate k
+			uint64_t back = D.value.back();
+			uint64_t k = 0;
+			while( back >>= 1 ) {
+				++k;
 			}
 
-			if( N < D ) {
-				ret = (uint64_t) 0;
-				if( pRemain ) {
-					*pRemain = N;
-				}
-				return ret;
+			k += (D.size() > 1 ? D.size() - 1 : 0) * 32;
+			
+			//Calculate m
+			BigUInt mBase = 4;
+			BigUInt FourPowK = mBase ^ k;
+			BigUInt m = FourPowK / D;
+			
+			//Q
+			BigUInt q = m * N;
+			q = q / FourPowK;
+			
+			if( pR ) {
+				BigUInt r = q * D;
+				r = N - r;
+			
+				*pR = r < D ? r : r - D;
 			}
+			
+			return q;	
+			
+		} 
+		 
+
+
+		static BigUInt
+		DACDivide( BigUInt &N, BigUInt &D, BigUInt *pRemain = NULL ) {
+			BigUInt ret((uint64_t)0);
 	
 			uint64_t nSize = N.size();
 			uint64_t dSize = D.size();
@@ -567,12 +611,7 @@ operator<<( BigUInt &a, uint64_t bv ) {
 BigUInt
 operator%( BigUInt &a, BigUInt &b ) {
 	BigUInt ret;
-	if( a == 0 ) {
-		ret = (uint64_t)0;
-		return ret;
-	}
-
-	BigUInt::DACDivide(a, b, &ret);
+	BigUInt::DivideWithRemainder(a, b, &ret);
 	return ret;
 }
 
@@ -583,14 +622,8 @@ operator%( BigUInt &a, uint32_t bv ) {
 }
 
 BigUInt
-operator/( BigUInt &a, BigUInt &b ) {
-	if( b == 0 ) {
-		std::cerr << "Error: Divide by 0." << std::endl;
-		BigUInt ret;
-		return ret;
-	}
-
-	return BigUInt::DACDivide(a, b);
+operator/( BigUInt &N, BigUInt &D ) {
+	return BigUInt::DivideWithRemainder(N, D, NULL);
 }
 
 BigUInt
