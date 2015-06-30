@@ -12,7 +12,7 @@
 #define UINT64_HIGH 0xFFFFFFFF00000000
 #define UINT64_LOW  0xFFFFFFFF
 
-#define BARRETT_THRESHOLD 3
+#define BARRETT_THRESHOLD 10
 
 static const char DigitToHex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
@@ -31,22 +31,18 @@ class BigUInt {
 			initFromString(inStr);
 		}
 
-		BigUInt( string in ) {
+		BigUInt( string const in ) {
 			initFromString(in);
 		}
 	
-		BigUInt( vector<uint32_t> in ) {
-			value = in;
-		}
-		
-		BigUInt( vector<uint32_t>::iterator in1, vector<uint32_t>::iterator in2 ) {
+		BigUInt( vector<uint32_t>::const_iterator in1, vector<uint32_t>::const_iterator in2 ) {
 			value = vector<uint32_t>(in1, in2);
 			if (value.size() == 0 ) {
 				append(0);
 			}
 		}
 
-		BigUInt( uint64_t in ) {
+		BigUInt( uint64_t const in ) {
 			if( in >= MAX_LIMIT ) {
 				uint64_t high = in & UINT64_HIGH;
 				high = high >> 32;
@@ -59,12 +55,12 @@ class BigUInt {
 		
 		
 		size_t
-		size() {
+		size() const {
 			return value.size();
 		}
 
 		uint64_t
-		toUint64() {
+		toUint64() const {
 			uint64_t ret = 0;
 			if        ( value.size() == 1 ) {
 				ret = value[0];
@@ -82,7 +78,7 @@ class BigUInt {
 		}
 
 		static BigUInt
-		DivideWithRemainder( BigUInt &N, BigUInt &D, BigUInt *pR ) {
+		DivideWithRemainder( BigUInt const &N, BigUInt const &D, BigUInt * const pR ) {
 			if( D == 0 ) {
 				std::cerr << "Error: Divide by 0." << std::endl;
 				BigUInt ret;
@@ -122,15 +118,14 @@ class BigUInt {
 		}
 
 		static BigUInt
-		ModExp(BigUInt &inBase, BigUInt &inExp, BigUInt &mod) {
+		ModExp(BigUInt const &inBase, BigUInt const &inExp, BigUInt const &mod) {
 			
 			BigUInt ret = 1;
 			BigUInt base = inBase % mod;
 			BigUInt exp = inExp;
 
 			while( exp > 0 ) {
-				BigUInt check1 = exp % 2;
-				if( check1 == 1 ){
+				if( !exp.isEven() ) {
 					ret = ret * base;
 					ret = ret % mod;
 				}
@@ -192,19 +187,31 @@ class BigUInt {
 		}
 
 		BigUInt&
-		operator+=( BigUInt &b ) {
-			this->value.reserve(this->value.size() + b.value.size() + 1);
-			uint64_t size = Pad(*this, b);
+		operator+=( BigUInt const &b ) {
 			uint64_t carry = 0;
 			uint64_t i = 0;
 			uint64_t result  = 0;
 			uint64_t av = 0;
 			uint64_t bv = 0;
+		
+			if( !value.size() ) {
+				value = std::move(b.value);
+				return *this;
+			}
+
+			if( !b.size() ) {
+				return *this;
+			}
+
+			uint64_t sizeMax = this->size() > b.size() ? this->size() : b.size();
+			this->value.resize(sizeMax);
+			uint64_t aIdxMax = this->size() - 1;
+			uint64_t bIdxMax = b.size() - 1;
 
 			//Going through backwards, so prepend
-			for (; i < size; i++) {
-				av = this->value[i];
-				bv = b.value[i];
+			for (; i < sizeMax; i++) {
+				av = i > aIdxMax ? 0 : this->value[i];
+				bv = i > bIdxMax ? 0 : b.value[i];
 				result = av + bv + carry;
 				value[i] = result % MAX_LIMIT;
 				carry = result / MAX_LIMIT;
@@ -215,7 +222,8 @@ class BigUInt {
 				carry = carry / MAX_LIMIT;
 			}
 
-			BigUInt::Unpad(*this, b);
+			Unpad(*this);
+
 			return *this;
 		}
 
@@ -274,7 +282,7 @@ class BigUInt {
 		}
 
 		static BigUInt
-		LeftShift( BigUInt &a ) {
+		LeftShift( BigUInt const &a ) {
 			BigUInt ret = a;
 			
 			bool addEntry = false;
@@ -312,7 +320,7 @@ class BigUInt {
 		}
 	
 		static BigUInt
-		RightShift( BigUInt &a ) {
+		RightShift( BigUInt const &a ) {
 			BigUInt ret = a;
 
 			auto i = ret.value.begin();
@@ -339,7 +347,7 @@ class BigUInt {
 			return ret;
 		}
 		static BigUInt
-		Mul_u32int( BigUInt &a, uint32_t b ) {
+		Mul_u32int( BigUInt const &a, uint32_t const b ) {
 			
 			BigUInt ret;
 
@@ -365,7 +373,7 @@ class BigUInt {
 			return ret;
 
 		}
-		
+	
 		static uint64_t	
 		Pad( BigUInt &a, BigUInt &b ) {
 			if ( a.value.size() > b.value.size() ) {
@@ -383,17 +391,6 @@ class BigUInt {
 		}
 
 		static void
-		Unpad( BigUInt &a, BigUInt &b ) {
-			while(a.value.back() == 0 && a.value.size() != 1) {
-				a.value.pop_back();
-			}
-			
-			while(b.value.back() == 0 && b.value.size() != 1) {
-				b.value.pop_back();
-			}
-		}
-		
-		static void
 		Unpad( BigUInt &a ) {
 			while(a.value.back() == 0 && a.value.size() != 1) {
 				a.value.pop_back();
@@ -401,12 +398,12 @@ class BigUInt {
 		}
 
 		bool
-		isEven() {
+		isEven() const {
 			return value.size() > 0 ? !(0x1 & value[0]) : false;
 		}
 
 		static BigUInt
-		ExpBySquaring( BigUInt &x, BigUInt &n ) {
+		ExpBySquaring( BigUInt const &x, BigUInt const &n ) {
 
 			if( n == 0 ) {
 				return 1;
@@ -428,7 +425,7 @@ class BigUInt {
 		}
 
 		static BigUInt
-		BarrettReduction ( BigUInt &N, BigUInt &D, BigUInt *pR = nullptr) {
+		BarrettReduction ( BigUInt const &N, BigUInt const &D, BigUInt * const pR = nullptr) {
 
 			//Calculate k
 			uint64_t back = D.value.back();
@@ -462,7 +459,7 @@ class BigUInt {
 
 
 		static BigUInt
-		DACDivide( BigUInt &N, BigUInt &D, BigUInt *pRemain = NULL ) {
+		DACDivide( BigUInt const &N, BigUInt const &D, BigUInt * const pRemain = NULL ) {
 			BigUInt ret((uint64_t)0);
 	
 			uint64_t nSize = N.size();
@@ -530,16 +527,18 @@ class BigUInt {
 		}
 
 		static BigUInt
-		Karatsuba( BigUInt &a, BigUInt &b ) {
-			if( a.size() == 0 || b.size() == 0 ) {
+		Karatsuba( BigUInt const &x, BigUInt const &y ) {
+			if( x.size() == 0 || y.size() == 0 ) {
 				std::cerr << "Error: Karatsuba - a value has no contents." << std::endl;
 			}
 			
-			if( a.size() == 1 || b.size() == 1 ) {
-				return a * b;
+			if( x.size() == 1 || y.size() == 1 ) {
+				return x * y;
 			}
 			
 			BigUInt ret;
+			BigUInt a = x;
+			BigUInt b = y;
 
 			uint64_t m = Pad(a, b);
 			uint64_t m2 = m/2;
@@ -575,42 +574,44 @@ class BigUInt {
 			ret = z2 + zdiff;
 			ret = ret + z0;
 
-			Unpad(a, b);
+			Unpad(a);
+			Unpad(b);
 			Unpad(ret);
 
 			return ret;
 
 		}
 
-	friend bool operator==( BigUInt &a, BigUInt &b );
-	friend bool operator==( BigUInt &a, uint32_t b );
-	friend bool operator!=( BigUInt &a, BigUInt &b );
-	friend bool operator!=( BigUInt &a, uint32_t b );
-	friend bool operator< (BigUInt &a, BigUInt &b);
-	friend bool operator< (BigUInt &a, uint32_t b);
-	friend bool operator> (BigUInt &a, uint32_t b);
-	friend std::ostream& operator <<(std::ostream& stream, const BigUInt& a);
-	friend BigUInt operator <<( BigUInt &a, BigUInt &b );
-	friend BigUInt operator <<( BigUInt &a, uint64_t b );
-	friend BigUInt operator >>( BigUInt &a, uint64_t b );
-	friend BigUInt operator+( BigUInt &a, BigUInt &b );
-	friend BigUInt operator+( BigUInt &a, uint32_t b );
-	friend BigUInt operator-( BigUInt &a, BigUInt &b );
-	friend BigUInt operator-( BigUInt &a, uint32_t b );
-	friend BigUInt operator*( BigUInt &a, BigUInt &b );
-	friend BigUInt operator*( BigUInt &a, uint32_t b );
-	friend BigUInt operator^( BigUInt &a, BigUInt &b );
-	friend BigUInt operator^( BigUInt &a, uint32_t b );
-	friend BigUInt operator/( BigUInt &a, BigUInt &b );
-	friend BigUInt operator/( BigUInt &a, uint32_t b );
-	friend BigUInt operator%( BigUInt &a, BigUInt &b );
-	friend BigUInt operator%( BigUInt &a, uint32_t b );
+	friend bool operator==( BigUInt const &a, BigUInt const &b );
+	friend bool operator==( BigUInt const &a, uint32_t const b );
+	friend bool operator!=( BigUInt const &a, BigUInt const &b );
+	friend bool operator!=( BigUInt const &a, uint32_t const b );
+	friend bool operator< (BigUInt const &a, BigUInt const &b);
+	friend bool operator< (BigUInt const &a, uint32_t const b);
+	friend bool operator> (BigUInt const &a, uint32_t const b);
+	friend std::ostream& operator<<(std::ostream& stream, const BigUInt& a);
+	friend BigUInt operator<<( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator<<( BigUInt const &a, uint64_t const b );
+	friend BigUInt operator>>( BigUInt const &a, uint64_t const b );
+	friend BigUInt operator>>( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator+( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator+( BigUInt const &a, uint32_t const b );
+	friend BigUInt operator-( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator-( BigUInt const &a, uint32_t const b );
+	friend BigUInt operator*( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator*( BigUInt const &a, uint32_t const b );
+	friend BigUInt operator^( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator^( BigUInt const &a, uint32_t const b );
+	friend BigUInt operator/( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator/( BigUInt const &a, uint32_t const b );
+	friend BigUInt operator%( BigUInt const &a, BigUInt const &b );
+	friend BigUInt operator%( BigUInt const &a, uint32_t const b );
 };
 
 BigUInt
-operator>>( BigUInt &a, uint64_t b ) {
+operator>>( BigUInt const &a, BigUInt const &b ) {
 	BigUInt ret = a;
-	for( uint64_t i = 0; i < b; ++i) {
+	for( BigUInt count = b; count > 0; count = count - 1) {
 		ret = BigUInt::RightShift(ret);
 	}
 	BigUInt::Unpad(ret);
@@ -618,7 +619,14 @@ operator>>( BigUInt &a, uint64_t b ) {
 }
 
 BigUInt
-operator<<( BigUInt &a, BigUInt &b ) {
+operator>>( BigUInt const &a, uint64_t const bv ) {
+	BigUInt b(bv);
+	return operator>>(a, b);
+
+}
+
+BigUInt
+operator<<( BigUInt const &a, BigUInt const &b ) {
 	BigUInt ret = a;
 	for( BigUInt count = b ; count > 0; count = count - 1) {
 		ret = BigUInt::LeftShift(ret);
@@ -629,49 +637,54 @@ operator<<( BigUInt &a, BigUInt &b ) {
 
 
 BigUInt
-operator<<( BigUInt &a, uint64_t bv ) {
+operator<<( BigUInt const &a, uint64_t const bv ) {
 	BigUInt b(bv);
 	return operator<<(a, b);
 
 }
 
 BigUInt
-operator%( BigUInt &a, BigUInt &b ) {
+operator%( BigUInt const &a, BigUInt const &b ) {
 	BigUInt ret;
+
+	if( b == 2 ) {
+		return !a.isEven();
+	}
+	
 	BigUInt::DivideWithRemainder(a, b, &ret);
 	return ret;
 }
 
 BigUInt
-operator%( BigUInt &a, uint32_t bv ) {
+operator%( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator%(a, b);
 }
 
 BigUInt
-operator/( BigUInt &N, BigUInt &D ) {
+operator/( BigUInt const &N, BigUInt const &D ) {
 	return BigUInt::DivideWithRemainder(N, D, NULL);
 }
 
 BigUInt
-operator/( BigUInt &a, uint32_t bv ) {
+operator/( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator/(a, b);
 }
 
 BigUInt
-operator^( BigUInt &a, uint32_t bv ) {
+operator^( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator^(a, b);
 }
 
 BigUInt
-operator^( BigUInt &a, BigUInt &b ) {
+operator^( BigUInt const &a, BigUInt const &b ) {
 	return BigUInt::ExpBySquaring(a, b);
 }
 
 bool
-operator> (BigUInt &a, uint32_t b) {
+operator> (BigUInt const &a, uint32_t const b) {
 	if( a.value.size() == 1 ) {
 		return a.value[0] > b;
 	}
@@ -688,7 +701,7 @@ operator> (BigUInt &a, uint32_t b) {
 }
 
 bool
-operator< (BigUInt &a, BigUInt &b) {
+operator< (BigUInt const &a, BigUInt const &b) {
 	if( a.value.size() != b.value.size() ) {
 		return a.value.size() < b.value.size();
 	} else {
@@ -702,29 +715,41 @@ operator< (BigUInt &a, BigUInt &b) {
 }
 
 bool
-operator< (BigUInt &a, uint32_t b) {
+operator< (BigUInt const &a, uint32_t const b) {
 	return a.value.size() == 1 ? a.value[0] < b : false;
 }
 
 BigUInt
-operator-( BigUInt &a, uint32_t bv ) {
+operator-( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator-(a, b);
 }
 	
 BigUInt
-operator-( BigUInt &a, BigUInt &b ) {
+operator-( BigUInt const &a, BigUInt const &b ) {
 	BigUInt ret;
-	uint64_t size = BigUInt::Pad(a, b);
-	ret.value.reserve(size);
 	uint64_t i = 0;
 	bool borrow = false;
 	int64_t result  = 0;
 
+	if( !b.size() ) {
+		return a;
+	}
+
+	if( !a.size() ) {
+		std::cerr << "operator- : a is empty" << std::endl;
+		return a;
+	}
+
+	uint64_t sizeMax = a.size() > b.size() ? a.size() : b.size();
+	ret.value.reserve(sizeMax);
+	uint64_t aIdxMax = a.size() - 1;
+	uint64_t bIdxMax = b.size() - 1;
+
 	//Going through backwards, so prepend
-	for (; i < size; i++) {
-		uint64_t av = a.value[i];
-		uint64_t bv = b.value[i];
+	for (; i < sizeMax; i++) {
+		uint64_t av = i > aIdxMax ? 0 : a.value[i];
+		uint64_t bv = i > bIdxMax ? 0 : b.value[i];
 		result = av - bv;
 		if( borrow ) {
 			result -= 1;
@@ -744,32 +769,45 @@ operator-( BigUInt &a, BigUInt &b ) {
 		ret.prepend( v - 1 );
 	}
 
-	BigUInt::Unpad(a, b);
 	BigUInt::Unpad(ret);
 	return ret;
 }
 
 BigUInt
-operator+( BigUInt &a, uint32_t bv ) {
+operator+( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator+(a, b);
 }
 
 BigUInt
-operator+( BigUInt &a, BigUInt &b ) {
+operator+( BigUInt const &a, BigUInt const &b ) {
 	BigUInt ret;
-	ret.value.reserve(a.value.size() + b.value.size() + 1);
-	uint64_t size = BigUInt::Pad(a, b);
 	uint64_t carry = 0;
 	uint64_t i = 0;
 	uint64_t result  = 0;
 	uint64_t av = 0;
 	uint64_t bv = 0;
 
+	if( !a.size() ) {
+		return b;
+	}
+
+	if( !b.size() ) {
+		return a;
+	}
+			
+
+	uint64_t sizeMax = a.size() > b.size() ? a.size() : b.size();
+	ret.value.reserve(sizeMax + 1);
+	uint64_t aIdxMax = a.size() - 1;
+	uint64_t bIdxMax = b.size() - 1;
+
 	//Going through backwards, so prepend
-	for (; i < size; i++) {
-		av = a.value[i];
-		bv = b.value[i];
+	for (; i < sizeMax; i++) {
+		
+		av = i > aIdxMax ? 0 : a.value[i];
+		bv = i > bIdxMax ? 0 : b.value[i];
+
 		result = av + bv + carry;
 		ret.prepend( result % MAX_LIMIT );
 		carry = result / MAX_LIMIT;
@@ -779,7 +817,8 @@ operator+( BigUInt &a, BigUInt &b ) {
 		ret.prepend( carry );
 	}
 
-	BigUInt::Unpad(a, b);
+	BigUInt::Unpad(ret);
+
 	return ret;
 }
 
@@ -791,7 +830,7 @@ operator <<(std::ostream& stream, const BigUInt& a) {
 }
 
 BigUInt
-operator*( BigUInt &a, BigUInt &b ) {
+operator*( BigUInt const &a, BigUInt const &b ) {
 	if( (a.value.size() == 1 && a.value[0] == 0) || (b.value.size() == 1 && b.value[0] == 0) ) {
 		return (uint64_t)0;			
 	} else if (a.value.size() == 1 && b.value.size() == 1 ) {
@@ -810,30 +849,30 @@ operator*( BigUInt &a, BigUInt &b ) {
 }
 
 BigUInt
-operator*( BigUInt &a, uint32_t buint ) {
+operator*( BigUInt const &a, uint32_t const buint ) {
 	BigUInt b(buint);
 	return operator*(a, b);
 }
 
 bool
-operator!=( BigUInt &a, BigUInt &b ) {
+operator!=( BigUInt const &a, BigUInt const &b ) {
 	return !operator==(a, b);
 }
 
 bool
-operator!=( BigUInt &a, uint32_t bv ) {
+operator!=( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return !operator==(a, b);
 }
 
 bool
-operator==( BigUInt &a, uint32_t bv ) {
+operator==( BigUInt const &a, uint32_t const bv ) {
 	BigUInt b(bv);
 	return operator==(a, b);
 }
 
 bool
-operator==( BigUInt &a, BigUInt &b ) {
+operator==( BigUInt const &a, BigUInt const &b ) {
 	if( a.size() != b.size() ){
 		return false;
 	}
